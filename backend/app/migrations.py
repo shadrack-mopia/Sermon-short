@@ -1,0 +1,96 @@
+"""Versioned schema migrations.
+
+Version 1 creates the full schema from the SQLAlchemy models. Future schema
+changes are appended to MIGRATIONS as (version, [sql, ...]) and applied once.
+"""
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
+
+from . import models  # noqa: F401  (register tables)
+from .db import Base, SessionLocal, engine
+from .models import ClipTemplate, SchemaVersion
+
+MIGRATIONS: list[tuple[int, list[str]]] = [
+    # (2, ["ALTER TABLE generated_clips ADD COLUMN foo TEXT"]),
+]
+
+BUILTIN_TEMPLATES = [
+    {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "name": "Bold Highlight",
+        "style": {
+            "font": "Arial Black", "font_size": 84, "primary_color": "#FFFFFF",
+            "highlight_color": "#FFD400", "outline_color": "#000000", "outline": 5,
+            "shadow": 2, "bg_box": False, "bg_color": "#000000", "uppercase": True,
+            "words_per_line": 3, "position": "lower", "animation": "highlight",
+        },
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000002",
+        "name": "Clean Box",
+        "style": {
+            "font": "Segoe UI Semibold", "font_size": 70, "primary_color": "#FFFFFF",
+            "highlight_color": "#8B5CF6", "outline_color": "#000000", "outline": 0,
+            "shadow": 0, "bg_box": True, "bg_color": "#000000", "uppercase": False,
+            "words_per_line": 5, "position": "lower", "animation": "highlight",
+        },
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000003",
+        "name": "Gospel Gold",
+        "style": {
+            "font": "Georgia", "font_size": 78, "primary_color": "#FFFFFF",
+            "highlight_color": "#E8B931", "outline_color": "#1A1A2E", "outline": 4,
+            "shadow": 3, "bg_box": False, "bg_color": "#000000", "uppercase": False,
+            "words_per_line": 4, "position": "middle", "animation": "highlight",
+        },
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000004",
+        "name": "One Word Pop",
+        "style": {
+            "font": "Impact", "font_size": 96, "primary_color": "#FFFFFF",
+            "highlight_color": "#22D3EE", "outline_color": "#000000", "outline": 6,
+            "shadow": 0, "bg_box": False, "bg_color": "#000000", "uppercase": True,
+            "words_per_line": 1, "position": "middle", "animation": "pop",
+        },
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000005",
+        "name": "Minimal",
+        "style": {
+            "font": "Segoe UI", "font_size": 64, "primary_color": "#FFFFFF",
+            "highlight_color": "#FFFFFF", "outline_color": "#000000", "outline": 3,
+            "shadow": 1, "bg_box": False, "bg_color": "#000000", "uppercase": False,
+            "words_per_line": 6, "position": "bottom", "animation": "none",
+        },
+    },
+]
+
+DEFAULT_TEMPLATE_ID = BUILTIN_TEMPLATES[0]["id"]
+
+
+def migrate() -> None:
+    eng = engine()
+    Base.metadata.create_all(eng)
+    with SessionLocal() as db:
+        current = db.scalar(select(SchemaVersion.version).order_by(SchemaVersion.version.desc()).limit(1))
+        if current is None:
+            db.add(SchemaVersion(version=1))
+            current = 1
+        for version, statements in MIGRATIONS:
+            if version > current:
+                for sql in statements:
+                    db.execute(text(sql))
+                db.add(SchemaVersion(version=version))
+        _seed_templates(db)
+        db.commit()
+
+
+def _seed_templates(db: Session) -> None:
+    for t in BUILTIN_TEMPLATES:
+        row = db.get(ClipTemplate, t["id"])
+        if row is None:
+            db.add(ClipTemplate(id=t["id"], org_id=None, name=t["name"], style=t["style"]))
+        else:
+            row.name, row.style = t["name"], t["style"]

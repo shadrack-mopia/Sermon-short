@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+pydantic-settings
+email-validator
+python-multipart
+bcrypt
+pyjwt
+httpx
+numpy
+opencv-python-headless<5
+faster-whisper
+# CUDA 12 runtime libraries for faster-whisper on NVIDIA GPUs (ignored on CPU)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
+pytest

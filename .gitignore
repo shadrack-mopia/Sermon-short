@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------
+# Sermon Shorts: files that must never be committed
+# ---------------------------------------------------------------
+
+# Secrets (SECRET_KEY signs login sessions). Commit .env.example instead.
+.env
+.env.*
+!.env.example
+*.pem
+
+# ---------- Python (backend) ----------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------- Node / Next.js (frontend) ----------
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---------- App data (lives in D:\Sermons, outside this folder) ----------
+# Safety net in case DATA_DIR is ever pointed inside the project.
+/db/
+/media/
+/models/
+/logs/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.log
+worker.heartbeat
+pids.txt
+
+# Output of scripts/e2e_smoke.py
+e2e_out/
+
+# ---------- Editors / OS ----------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code: keep shared settings, ignore personal ones
+.claude/settings.local.json
