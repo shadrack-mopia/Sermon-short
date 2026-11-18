@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { CategoryBadge, SermonStatusBadge } from "@/components/badges";
 import { ClipCard } from "@/components/clip-card";
@@ -25,7 +26,7 @@ import { normalizeSettings, SermonSettingsForm, settingsError } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { PageLoader, Skeleton } from "@/components/ui/spinner";
@@ -55,6 +56,9 @@ export default function SermonPage() {
     poll: (d) => (!d || isProcessing(d.status) ? 3000 : d.clips_rendering > 0 ? 6000 : false),
   });
   const [reprocessOpen, setReprocessOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const router = useRouter();
+  const toast = useToast();
 
   if (sermon.error && !sermon.data)
     return (
@@ -90,19 +94,44 @@ export default function SermonPage() {
             {s.size_bytes ? <span>{formatBytes(s.size_bytes)}</span> : null}
           </div>
         </div>
-        {!isProcessing(s.status) && (
-          <div className="flex flex-wrap gap-2">
-            {ready && (s.clip_count ?? 0) > 0 && (
-              <a href={`/api/clips/download-zip?sermon_id=${s.id}`} className={buttonClass("outline")}>
-                <Download className="h-4 w-4" /> Download all (ZIP)
-              </a>
-            )}
-            <Button variant="outline" onClick={() => setReprocessOpen(true)}>
-              <RefreshCw className="h-4 w-4" /> Reprocess
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {!isProcessing(s.status) && (
+            <>
+              {ready && (s.clip_count ?? 0) > 0 && (
+                <a href={`/api/clips/download-zip?sermon_id=${s.id}`} className={buttonClass("outline")}>
+                  <Download className="h-4 w-4" /> Download all (ZIP)
+                </a>
+              )}
+              <Button variant="outline" onClick={() => setReprocessOpen(true)}>
+                <RefreshCw className="h-4 w-4" /> Reprocess
+              </Button>
+            </>
+          )}
+          <Button variant="outline" className="text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4" /> Delete sermon
+          </Button>
+        </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title={`Delete “${s.title}”?`}
+        description={
+          <>
+            This permanently deletes the sermon video, its transcript and{" "}
+            {s.clip_count ? <strong>all {s.clip_count} of its clips</strong> : "all of its clips"} from this computer.
+            {isProcessing(s.status) && " Processing will be stopped."} This can&apos;t be undone.
+          </>
+        }
+        confirmLabel="Delete sermon"
+        danger
+        onConfirm={async () => {
+          await api.del(`/api/sermons/${s.id}`);
+          toast.success("Sermon deleted");
+          router.push("/sermons");
+        }}
+      />
 
       {isProcessing(s.status) ? (
         <ProcessingView sermon={s} />
@@ -206,6 +235,8 @@ function ReadyView({ sermon: s, onReload }: { sermon: SermonDetail; onReload: ()
   const clips = useApi<Clip[]>(`/api/clips?sermon_id=${s.id}&sort=score`, {
     poll: (d) => (d?.some((c) => isRendering(c.status)) ? 5000 : false),
   });
+  const [deletingClip, setDeletingClip] = useState<Clip | null>(null);
+  const clipToast = useToast();
 
   const seek = (t: number) => {
     const v = videoRef.current;
@@ -286,8 +317,22 @@ function ReadyView({ sermon: s, onReload }: { sermon: SermonDetail; onReload: ()
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {clips.data.map((c) => (
-                <ClipCard key={c.id} clip={c} showSermon={false} />
+                <ClipCard key={c.id} clip={c} showSermon={false} onDelete={() => setDeletingClip(c)} />
               ))}
+              <ConfirmDialog
+                open={!!deletingClip}
+                onClose={() => setDeletingClip(null)}
+                title={`Delete “${deletingClip?.title || "this clip"}”?`}
+                description="The rendered video file is permanently removed from this computer. The sermon is kept, so you can make the clip again from All candidates. This can't be undone."
+                confirmLabel="Delete clip"
+                danger
+                onConfirm={async () => {
+                  if (!deletingClip) return;
+                  await api.del(`/api/clips/${deletingClip.id}`);
+                  await Promise.all([clips.reload(), onReload()]);
+                  clipToast.success("Clip deleted");
+                }}
+              />
             </div>
           )
         ) : (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { AlertCircle, Check, Download, Film, Loader2, Play } from "lucide-react";
+import { AlertCircle, Check, Download, Film, Loader2, Play, Trash2 } from "lucide-react";
 import { cn, formatDuration, isRendering } from "@/lib/format";
 import type { Clip } from "@/lib/types";
 import { CategoryBadge, ScoreBadge } from "./badges";
@@ -12,11 +12,14 @@ export function ClipCard({
   clip,
   selected,
   onToggleSelect,
+  onDelete,
   showSermon = true,
 }: {
   clip: Clip;
   selected?: boolean;
   onToggleSelect?: () => void;
+  /** Shows a delete button; the parent is responsible for confirming. */
+  onDelete?: () => void;
   showSermon?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -119,16 +122,29 @@ export function ClipCard({
         </Link>
         <div className="flex items-center justify-between gap-2">
           <CategoryBadge category={clip.category} />
-          {clip.download_url && (
-            <a
-              href={clip.download_url}
-              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Download clip"
-              title="Download MP4"
-            >
-              <Download className="h-4 w-4" />
-            </a>
-          )}
+          <div className="flex items-center gap-0.5">
+            {clip.download_url && (
+              <a
+                href={clip.download_url}
+                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Download clip"
+                title="Download MP4"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                aria-label="Delete clip"
+                title="Delete clip"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
         {showSermon && clip.sermon_title && <div className="truncate text-xs text-slate-500">{clip.sermon_title}</div>}
       </div>

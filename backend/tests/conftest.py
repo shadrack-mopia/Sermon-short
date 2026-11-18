@@ -22,5 +22,6 @@ def client(tmp_path, monkeypatch):
     login_limiter.hits.clear()
     with TestClient(app) as c:
         yield c
+    db.engine().dispose()  # release the SQLite file so pytest can clean up tmp_path on Windows
     config.get_settings.cache_clear()
     os.environ.pop("DATA_DIR", None)

@@ -93,6 +93,64 @@ def test_team_members(client):
     assert client.post("/api/org/members", json={"email": "x@example.com", "name": "X", "password": "password123"}).status_code == 403
 
 
+def _add_clips(org_id: str, sermon_id: str, n: int, tmp_path) -> list[str]:
+    """Insert ready clips with real files on disk (as if the worker rendered them)."""
+    from app.db import SessionLocal
+    from app.jobs import enqueue
+    from app.models import GeneratedClip
+    ids = []
+    with SessionLocal() as db:
+        for i in range(n):
+            v, t = tmp_path / f"clip{i}.mp4", tmp_path / f"clip{i}.jpg"
+            v.write_bytes(b"video")
+            t.write_bytes(b"thumb")
+            c = GeneratedClip(org_id=org_id, sermon_id=sermon_id, title=f"Clip {i}", start_s=i * 10, end_s=i * 10 + 5,
+                              status="ready", video_path=str(v), thumb_path=str(t))
+            db.add(c)
+            db.flush()
+            enqueue(db, org_id, "render_clip", c.id)  # pending re-render that deletion must cancel
+            ids.append(c.id)
+        db.commit()
+    return ids
+
+
+def test_delete_single_and_bulk_clips(client, tmp_path):
+    me = register(client, "a@example.com", "Church A")
+    uid = upload(client, b"x" * 20)
+    sid = client.post(f"/api/uploads/{uid}/complete", json={"title": "S", "rights_confirmed": True}).json()["id"]
+    ids = _add_clips(me["org"]["id"], sid, 4, tmp_path)
+
+    # single delete removes the row, its files and its queued render job
+    assert client.delete(f"/api/clips/{ids[0]}").status_code == 200
+    assert not (tmp_path / "clip0.mp4").exists() and not (tmp_path / "clip0.jpg").exists()
+    assert client.get(f"/api/clips/{ids[0]}").status_code == 404
+    jobs = {j["ref_id"]: j["status"] for j in client.get("/api/jobs").json() if j["kind"] == "render_clip"}
+    assert jobs[ids[0]] == "failed" and jobs[ids[1]] == "queued"
+
+    # bulk delete; an unknown id is skipped, not an error
+    r = client.post("/api/clips/bulk-delete", json={"ids": [ids[1], ids[2], "no-such-clip"]})
+    assert r.json() == {"deleted": 2, "not_found": 1}
+    assert [c["id"] for c in client.get("/api/clips").json()] == [ids[3]]
+    assert client.post("/api/clips/bulk-delete", json={"ids": []}).status_code == 422
+
+    # another organisation can't delete these clips
+    client.post("/api/auth/logout")
+    register(client, "b@example.com", "Church B")
+    assert client.post("/api/clips/bulk-delete", json={"ids": [ids[3]]}).json() == {"deleted": 0, "not_found": 1}
+    assert client.delete(f"/api/clips/{ids[3]}").status_code == 404
+    assert (tmp_path / "clip3.mp4").exists()
+
+
+def test_delete_sermon_removes_clips(client, tmp_path):
+    me = register(client)
+    uid = upload(client, b"x" * 20)
+    sid = client.post(f"/api/uploads/{uid}/complete", json={"title": "S", "rights_confirmed": True}).json()["id"]
+    _add_clips(me["org"]["id"], sid, 2, tmp_path)
+    assert client.delete(f"/api/sermons/{sid}").status_code == 200
+    assert client.get(f"/api/sermons/{sid}").status_code == 404
+    assert client.get("/api/clips").json() == []
+
+
 def test_range_requests(client, tmp_path):
     from fastapi import Request
 

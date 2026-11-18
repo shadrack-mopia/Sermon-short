@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CheckSquare, Clapperboard, Download, Info, Square, Upload, X } from "lucide-react";
+import { CheckSquare, Clapperboard, Download, Info, Square, Trash2, Upload, X } from "lucide-react";
 import { ClipCard } from "@/components/clip-card";
 import { Button, buttonClass } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/spinner";
 import { EmptyState, ErrorState, PageHeader } from "@/components/ui/states";
-import { qs } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { api, qs } from "@/lib/api";
 import { CATEGORIES, isRendering } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Clip, Sermon } from "@/lib/types";
@@ -25,8 +27,13 @@ export default function ClipsPage() {
     poll: (d) => (d?.some((c) => isRendering(c.status)) ? 5000 : false),
   });
 
+  const toast = useToast();
+  const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
+  const allIds = useMemo(() => new Set((clips.data ?? []).map((c) => c.id)), [clips.data]);
   const readyIds = useMemo(() => new Set((clips.data ?? []).filter((c) => c.status === "ready").map((c) => c.id)), [clips.data]);
-  const sel = [...selected].filter((id) => readyIds.has(id));
+  // only count clips still visible (filters may hide some; deleted ones disappear)
+  const sel = [...selected].filter((id) => allIds.has(id));
+  const selReady = sel.filter((id) => readyIds.has(id));
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s);
@@ -34,7 +41,17 @@ export default function ClipsPage() {
       else n.add(id);
       return n;
     });
-  const allSelected = readyIds.size > 0 && sel.length === readyIds.size;
+  const allSelected = allIds.size > 0 && sel.length === allIds.size;
+  const deleteTitle = (ids: string[]) =>
+    ids.length === 1 ? `“${clips.data?.find((c) => c.id === ids[0])?.title || "this clip"}”` : `${ids.length} clips`;
+  const confirmDelete = async () => {
+    if (!deleteIds) return;
+    if (deleteIds.length === 1) await api.del(`/api/clips/${deleteIds[0]}`);
+    else await api.post("/api/clips/bulk-delete", { ids: deleteIds });
+    setSelected((s) => new Set([...s].filter((id) => !deleteIds.includes(id))));
+    await clips.reload();
+    toast.success(deleteIds.length === 1 ? "Clip deleted" : `${deleteIds.length} clips deleted`);
+  };
   const filtered = !!(category || sermonId);
   const rendering = clips.data?.filter((c) => isRendering(c.status)).length ?? 0;
 
@@ -87,8 +104,8 @@ export default function ClipsPage() {
         )}
         <div className="flex items-center gap-3 sm:ml-auto">
           {rendering > 0 && <span className="text-xs text-indigo-700">{rendering} rendering…</span>}
-          {readyIds.size > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setSelected(allSelected ? new Set() : new Set(readyIds))}>
+          {allIds.size > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setSelected(allSelected ? new Set() : new Set(allIds))}>
               {allSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
               {allSelected ? "Clear selection" : "Select all"}
             </Button>
@@ -122,7 +139,13 @@ export default function ClipsPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {clips.data.map((c) => (
-            <ClipCard key={c.id} clip={c} selected={selected.has(c.id)} onToggleSelect={c.status === "ready" ? () => toggle(c.id) : undefined} />
+            <ClipCard
+              key={c.id}
+              clip={c}
+              selected={selected.has(c.id)}
+              onToggleSelect={() => toggle(c.id)}
+              onDelete={() => setDeleteIds([c.id])}
+            />
           ))}
         </div>
       )}
@@ -133,15 +156,34 @@ export default function ClipsPage() {
             <span>
               {sel.length} clip{sel.length === 1 ? "" : "s"} selected
             </span>
-            <a href={`/api/clips/download-zip${qs({ ids: sel.join(",") })}`} className={buttonClass("primary", "sm")}>
-              <Download className="h-3.5 w-3.5" /> Download ZIP
-            </a>
+            {selReady.length > 0 && (
+              <a
+                href={`/api/clips/download-zip${qs({ ids: selReady.join(",") })}`}
+                className={buttonClass("primary", "sm")}
+                title={selReady.length < sel.length ? "Only finished clips are included" : undefined}
+              >
+                <Download className="h-3.5 w-3.5" /> Download ZIP{selReady.length < sel.length ? ` (${selReady.length})` : ""}
+              </a>
+            )}
+            <Button variant="danger" size="sm" onClick={() => setDeleteIds(sel)}>
+              <Trash2 className="h-3.5 w-3.5" /> Delete
+            </Button>
             <button onClick={() => setSelected(new Set())} className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Clear selection">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteIds}
+        onClose={() => setDeleteIds(null)}
+        title={`Delete ${deleteIds ? deleteTitle(deleteIds) : ""}?`}
+        description="The rendered video files are permanently removed from this computer. The sermon itself is kept, so you can make these clips again later. This can't be undone."
+        confirmLabel={deleteIds && deleteIds.length > 1 ? `Delete ${deleteIds.length} clips` : "Delete clip"}
+        danger
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

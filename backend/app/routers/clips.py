@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..files import file_response, safe_unlink
 from ..jobs import enqueue, record_usage
-from ..models import BrandKit, ClipCaption, ClipTemplate, GeneratedClip, Sermon, TranscriptSegment
+from ..models import BrandKit, ClipCaption, ClipTemplate, GeneratedClip, ProcessingJob, Sermon, TranscriptSegment
 from ..pipeline.boundaries import flatten_words, snap_range, text_between
 from ..security import Ctx, audit, current_ctx
 from ..serializers import clip_out
@@ -247,13 +247,37 @@ def rerender(clip_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depend
     return clip_out(c, db.get(Sermon, c.sermon_id).title)
 
 
-@router.delete("/clips/{clip_id}")
-def delete_clip(clip_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
-    c = get_clip(db, ctx, clip_id)
+class BulkDeleteIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=1000)
+
+
+def _remove_clip(db: Session, ctx: Ctx, c: GeneratedClip) -> None:
+    """Delete a clip's files, cancel its pending render job, and remove the row."""
+    for j in db.scalars(select(ProcessingJob).where(ProcessingJob.kind == "render_clip", ProcessingJob.ref_id == c.id,
+                                                    ProcessingJob.status == "queued")):
+        j.status, j.error = "failed", "Clip deleted"
+    # a render already running notices the clip is gone and discards its output (see worker.render_clip)
     safe_unlink(c.video_path)
     safe_unlink(c.thumb_path)
     audit(db, ctx, "clip.delete", c.id, title=c.title)
     db.delete(c)
+
+
+@router.post("/clips/bulk-delete")
+def bulk_delete(body: BulkDeleteIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    ids = list(dict.fromkeys(body.ids))
+    clips = db.scalars(select(GeneratedClip).where(GeneratedClip.org_id == ctx.org_id,
+                                                   GeneratedClip.id.in_(ids))).all()
+    for c in clips:
+        _remove_clip(db, ctx, c)
+    db.commit()
+    # ids from other organisations are silently skipped (never revealed or deleted)
+    return {"deleted": len(clips), "not_found": len(ids) - len(clips)}
+
+
+@router.delete("/clips/{clip_id}")
+def delete_clip(clip_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    _remove_clip(db, ctx, get_clip(db, ctx, clip_id))
     db.commit()
     return {"ok": True}
 
