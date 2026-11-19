@@ -1,6 +1,8 @@
 from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -10,12 +12,16 @@ from ..db import get_db
 from ..files import file_response, safe_unlink
 from ..models import BrandKit, ClipTemplate
 from ..security import Ctx, audit, current_ctx
+from ..pipeline import watermark as wm
 from ..serializers import brand_out, template_out
 
 router = APIRouter(tags=["brand"])
 
 LOGO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 HEX = r"^#[0-9A-Fa-f]{6}$"
+WmPosition = Literal["top-left", "top-center", "top-right", "middle-left", "center", "middle-right",
+                     "bottom-left", "bottom-center", "bottom-right"]
+SocialIcon = Literal["youtube", "tiktok", "instagram", "facebook", "x", "whatsapp"]
 
 
 class Colors(BaseModel):
@@ -29,6 +35,10 @@ class BrandIn(BaseModel):
     colors: Colors = Colors()
     font: str | None = Field(default=None, max_length=100)
     watermark_text: str | None = Field(default=None, max_length=200)
+    watermark_position: WmPosition = "top-left"
+    watermark_size: int = Field(default=100, ge=wm.SIZE_MIN, le=wm.SIZE_MAX)
+    watermark_opacity: int = Field(default=80, ge=wm.OPACITY_MIN, le=wm.OPACITY_MAX)
+    social_icons: list[SocialIcon] = Field(default_factory=list, max_length=6)
     logo_position: str = Field(default="top-right", pattern="^(top-left|top-right|bottom-left|bottom-right)$")
     default_template_id: str | None = None
     is_default: bool = False
@@ -39,7 +49,11 @@ class BrandPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     colors: Colors | None = None
     font: str | None = None
-    watermark_text: str | None = None
+    watermark_text: str | None = Field(default=None, max_length=200)
+    watermark_position: WmPosition | None = None
+    watermark_size: int | None = Field(default=None, ge=wm.SIZE_MIN, le=wm.SIZE_MAX)
+    watermark_opacity: int | None = Field(default=None, ge=wm.OPACITY_MIN, le=wm.OPACITY_MAX)
+    social_icons: list[SocialIcon] | None = Field(default=None, max_length=6)
     logo_position: str | None = Field(default=None, pattern="^(top-left|top-right|bottom-left|bottom-right)$")
     default_template_id: str | None = None
     is_default: bool | None = None
@@ -161,6 +175,27 @@ def delete_logo(kit_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depe
 @router.get("/brand-kits/{kit_id}/logo")
 def get_logo(kit_id: str, request: Request, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
     return file_response(request, _kit(db, ctx, kit_id).logo_path)
+
+
+@router.get("/watermark/preview")
+def watermark_preview(
+    text: str = Query(default="", max_length=200),
+    icons: str = Query(default="", max_length=200, description="comma-separated: youtube,tiktok,instagram,facebook,x,whatsapp"),
+    size: int = Query(default=100, ge=wm.SIZE_MIN, le=wm.SIZE_MAX),
+    opacity: int = Query(default=80, ge=wm.OPACITY_MIN, le=wm.OPACITY_MAX),
+    font: str | None = Query(default=None, max_length=100),
+    ctx: Ctx = Depends(current_ctx),
+):
+    """The exact watermark image the renderer uses, sized for a 1080×1920 clip."""
+    names = [i.strip() for i in icons.split(",") if i.strip()]
+    bad = [i for i in names if i not in wm.SOCIAL_ICONS]
+    if bad:
+        raise HTTPException(400, f"Unknown icon(s): {', '.join(bad)}")
+    spec = wm.clamp_spec(text=text, icons=names, size=size, opacity=opacity, font=font)
+    if spec.is_empty():
+        raise HTTPException(400, "Add watermark text or at least one social icon")
+    png = wm.to_png(wm.build_image(spec, 1080, 1920))
+    return Response(png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.get("/templates")

@@ -13,10 +13,11 @@ import { Skeleton } from "@/components/ui/spinner";
 import { EmptyState, ErrorState, InlineError, PageHeader } from "@/components/ui/states";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import { IconPicker, PositionPicker, RangeField, WatermarkPreview, watermarkPreviewUrl } from "@/components/watermark";
 import { api, errorMessage } from "@/lib/api";
 import { cn, humanize } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { BrandKit, LogoPosition, Template } from "@/lib/types";
+import type { BrandKit, LogoPosition, SocialIcon, Template, WatermarkPosition } from "@/lib/types";
 
 export default function BrandPage() {
   const toast = useToast();
@@ -65,7 +66,10 @@ export default function BrandPage() {
                 ) : (
                   <span className="text-sm text-white/70">No logo yet</span>
                 )}
-                {k.watermark_text && <span className="absolute right-3 bottom-2 text-[11px] text-white/70">{k.watermark_text}</span>}
+                {(() => {
+                  const url = watermarkPreviewUrl({ text: k.watermark_text ?? "", icons: k.social_icons, size: 100, opacity: k.watermark_opacity, font: k.font });
+                  return url ? <img src={url} alt={`Watermark: ${k.watermark_text ?? ""}`} className="absolute right-3 bottom-2 h-5 w-auto" /> : null;
+                })()}
               </div>
               <div className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -99,6 +103,7 @@ export default function BrandPage() {
                 </div>
                 <div className="text-xs text-slate-500">
                   {k.font ? `Font: ${k.font} · ` : ""}Logo: {humanize(k.logo_position)}
+                  {k.watermark_text || k.social_icons.length ? ` · Watermark: ${humanize(k.watermark_position)}, ${k.watermark_size}%` : ""}
                   {k.default_template_id && templates.data ? ` · Captions: ${templates.data.find((t) => t.id === k.default_template_id)?.name ?? "—"}` : ""}
                 </div>
               </div>
@@ -146,6 +151,10 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
     accent: kit?.colors.accent ?? "#FFD400",
     font: kit?.font ?? "",
     watermark_text: kit?.watermark_text ?? "",
+    watermark_position: kit?.watermark_position ?? ("top-left" as WatermarkPosition),
+    watermark_size: kit?.watermark_size ?? 100,
+    watermark_opacity: kit?.watermark_opacity ?? 80,
+    social_icons: kit?.social_icons ?? ([] as SocialIcon[]),
     logo_position: kit?.logo_position ?? ("top-right" as LogoPosition),
     default_template_id: kit?.default_template_id ?? "",
     is_default: kit?.is_default ?? false,
@@ -169,6 +178,10 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
       colors: { primary: form.primary, secondary: form.secondary, accent: form.accent },
       font: form.font.trim() || null,
       watermark_text: form.watermark_text.trim() || null,
+      watermark_position: form.watermark_position,
+      watermark_size: form.watermark_size,
+      watermark_opacity: form.watermark_opacity,
+      social_icons: form.social_icons,
       logo_position: form.logo_position,
       default_template_id: form.default_template_id || null,
       is_default: form.is_default,
@@ -278,9 +291,6 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
           <Field label="Font" hint="Must be installed on the server computer.">
             <Input value={form.font} onChange={(e) => set("font", e.target.value)} placeholder="e.g. Montserrat" maxLength={100} />
           </Field>
-          <Field label="Watermark text">
-            <Input value={form.watermark_text} onChange={(e) => set("watermark_text", e.target.value)} placeholder="e.g. @gracechurch" maxLength={200} />
-          </Field>
           <Field label="Logo position">
             <div className="grid grid-cols-2 gap-1.5">
               {POSITIONS.map((p) => (
@@ -308,6 +318,47 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
               ))}
             </Select>
           </Field>
+        </div>
+        <div className="rounded-xl border border-slate-200 p-4">
+          <div className="mb-3 text-sm font-semibold text-slate-900">Watermark</div>
+          <div className="flex flex-col gap-5 sm:flex-row">
+            <div className="min-w-0 flex-1 space-y-4">
+              <Field label="Text" hint="Optional. For example your handle or church name.">
+                <Input value={form.watermark_text} onChange={(e) => set("watermark_text", e.target.value)} placeholder="e.g. @gracechurch" maxLength={200} />
+              </Field>
+              <div>
+                <Label>Social media icons</Label>
+                <IconPicker value={form.social_icons} onChange={(v) => set("social_icons", v)} />
+                <p className="mt-1 text-xs text-slate-500">Shown in front of the text. Pick none to show the text only.</p>
+              </div>
+              <div className="flex flex-wrap items-start gap-5">
+                <div>
+                  <Label>Position</Label>
+                  <PositionPicker value={form.watermark_position} onChange={(p) => set("watermark_position", p)} />
+                </div>
+                <div className="min-w-[160px] flex-1 space-y-3">
+                  <RangeField label="Size" value={form.watermark_size} min={50} max={300} step={10} onChange={(v) => set("watermark_size", v)} />
+                  <RangeField label="Opacity" value={form.watermark_opacity} min={10} max={100} onChange={(v) => set("watermark_opacity", v)} />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <Label>Preview</Label>
+              <WatermarkPreview
+                look={{
+                  text: form.watermark_text,
+                  icons: form.social_icons,
+                  position: form.watermark_position,
+                  size: form.watermark_size,
+                  opacity: form.watermark_opacity,
+                  font: form.font.trim() || null,
+                }}
+                logoUrl={logoPreview}
+                logoPosition={form.logo_position}
+              />
+              <p className="max-w-[180px] text-center text-[11px] text-slate-400">Same image as the rendered clip. Each clip can override these settings.</p>
+            </div>
+          </div>
         </div>
         <div className="space-y-4 rounded-xl bg-slate-50 p-4">
           <Switch checked={form.is_default} onChange={(v) => set("is_default", v)} label="Default brand kit" description="Used for new sermons unless you pick another." />

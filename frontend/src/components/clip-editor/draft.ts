@@ -27,6 +27,10 @@ export const DEFAULT_OPTIONS: ClipOptions = {
   crop_x: null,
   resolution: 1080,
   quality: "standard",
+  wm_position: null,
+  wm_size: null,
+  wm_opacity: null,
+  wm_icons: null,
 };
 
 export function draftFromClip(c: Clip): Draft {

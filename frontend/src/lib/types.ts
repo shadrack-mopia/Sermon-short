@@ -120,6 +120,11 @@ export interface ClipOptions {
   crop_x: number | null;
   resolution: 720 | 1080;
   quality: Quality;
+  /** Per-clip watermark overrides; null = use the brand kit's setting. */
+  wm_position: WatermarkPosition | null;
+  wm_size: number | null;
+  wm_opacity: number | null;
+  wm_icons: SocialIcon[] | null;
 }
 
 export type ClipStatus = "queued" | "rendering" | "ready" | "failed";
@@ -192,6 +197,17 @@ export interface Template {
 }
 
 export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type WatermarkPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "middle-left"
+  | "center"
+  | "middle-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+export type SocialIcon = "youtube" | "tiktok" | "instagram" | "facebook" | "x" | "whatsapp";
 
 export interface BrandKit {
   id: string;
@@ -199,6 +215,10 @@ export interface BrandKit {
   colors: { primary?: string; secondary?: string; accent?: string };
   font: string | null;
   watermark_text: string | null;
+  watermark_position: WatermarkPosition;
+  watermark_size: number;
+  watermark_opacity: number;
+  social_icons: SocialIcon[];
   logo_position: LogoPosition;
   default_template_id: string | null;
   is_default: boolean;

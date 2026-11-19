@@ -9,6 +9,7 @@ from ..config import get_settings
 from ..services.media import (SDR_TAGS, audio_bitrate, encoder_args, is_hdr, run, run_with_progress, tonemap_filter,
                               video_encoder)
 from .captions import build_ass
+from .watermark import WatermarkSpec, build_image, overlay_xy
 
 log = logging.getLogger("render")
 
@@ -36,7 +37,7 @@ class RenderSpec:
     show_captions: bool = True
     logo_path: str | None = None
     logo_position: str = "top-right"
-    watermark: str | None = None
+    watermark: WatermarkSpec | None = None  # icons + text image overlay
     quality: str = "standard"  # standard | high | max
     color_transfer: str | None = None  # from ffprobe; HDR sources are tone-mapped to SDR
 
@@ -159,10 +160,9 @@ def render(spec: RenderSpec, workdir: Path, on_progress=None) -> None:
     xexp = x_expression(spec.track, spec.crop_x, spec.src_w, cw)
     y = max(0, (spec.src_h - ch) // 2)
 
-    has_subs = bool(spec.show_captions and spec.words) or bool(spec.watermark)
+    has_subs = bool(spec.show_captions and spec.words)
     if has_subs:
-        ass = build_ass(spec.words or [], spec.style or {}, ow, oh, dur, spec.show_captions, spec.watermark,
-                        "top-left" if spec.logo_position != "top-left" else "top-right")
+        ass = build_ass(spec.words or [], spec.style or {}, ow, oh, dur, spec.show_captions)
         (workdir / "captions.ass").write_text(ass, encoding="utf-8")
 
     chain = [f"[0:v]crop=w={cw}:h={ch}:x='{xexp}':y={y}", f"scale={ow}:{oh}:flags=lanczos", "setsar=1",
@@ -175,15 +175,37 @@ def render(spec: RenderSpec, workdir: Path, on_progress=None) -> None:
     graph = ",".join(chain) + "[base]"
     last = "[base]"
     inputs = ["-ss", f"{spec.start:.3f}", "-t", f"{dur:.3f}", "-i", str(spec.src)]
-    if spec.logo_path and Path(spec.logo_path).is_file():
+    m = int(min(ow, oh) * 0.04)  # margin from the frame edge
+    n_in = 1
+    logo_h = 0
+    has_logo = bool(spec.logo_path and Path(spec.logo_path).is_file())
+    if has_logo:
         lw = int(min(ow, oh) * 0.16)
-        m = int(min(ow, oh) * 0.04)
+        try:
+            from PIL import Image
+            with Image.open(spec.logo_path) as li:
+                logo_h = int(lw * li.height / max(1, li.width))
+        except OSError:
+            logo_h = lw
         pos = {"top-left": f"{m}:{m}", "top-right": f"W-w-{m}:{m}", "bottom-left": f"{m}:H-h-{m}",
                "bottom-right": f"W-w-{m}:H-h-{m}"}.get(spec.logo_position, f"W-w-{m}:{m}")
         inputs += ["-loop", "1", "-i", str(spec.logo_path)]
-        graph += (f";[1:v]scale={lw}:-1,format=rgba,colorchannelmixer=aa=0.92[logo];"
-                  f"{last}[logo]overlay={pos}:shortest=1[vout]")
-        last = "[vout]"
+        graph += (f";[{n_in}:v]scale={lw}:-1,format=rgba,colorchannelmixer=aa=0.92[logo];"
+                  f"{last}[logo]overlay={pos}:shortest=1[vlogo]")
+        last, n_in = "[vlogo]", n_in + 1
+    if spec.watermark and not spec.watermark.is_empty():
+        wm_png = workdir / "watermark.png"
+        build_image(spec.watermark, ow, oh).save(wm_png)
+        xy = overlay_xy(spec.watermark.position, m)
+        if has_logo and spec.watermark.position == spec.logo_position:
+            # same corner as the logo: sit just beyond the logo instead of on top of it
+            shift = m + logo_h + m // 2
+            x, yy = xy.split(":")
+            yy = str(shift) if spec.watermark.position.startswith("top") else f"H-h-{shift}"
+            xy = f"{x}:{yy}"
+        inputs += ["-loop", "1", "-i", wm_png.name]
+        graph += f";{last}[{n_in}:v]overlay={xy}:shortest=1[vwm]"
+        last, n_in = "[vwm]", n_in + 1
     graph += ";[0:a]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[aout]"
     (workdir / "graph.txt").write_text(graph, encoding="utf-8")
 

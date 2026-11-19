@@ -63,7 +63,9 @@ def template_out(t: ClipTemplate) -> dict:
 def brand_out(b: BrandKit) -> dict:
     return {
         "id": b.id, "name": b.name, "colors": b.colors or {}, "font": b.font,
-        "watermark_text": b.watermark_text, "logo_position": b.logo_position,
+        "watermark_text": b.watermark_text, "watermark_position": b.watermark_position or "top-left",
+        "watermark_size": b.watermark_size or 100, "watermark_opacity": b.watermark_opacity or 80,
+        "social_icons": b.social_icons or [], "logo_position": b.logo_position,
         "default_template_id": b.default_template_id, "is_default": b.is_default,
         "auto_apply": b.auto_apply,
         "logo_url": f"/api/brand-kits/{b.id}/logo?t={int(b.updated_at.timestamp())}" if b.logo_path else None,

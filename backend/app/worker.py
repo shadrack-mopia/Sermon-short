@@ -39,6 +39,7 @@ from .pipeline import analysis
 from .pipeline.bible import find_references
 from .pipeline.boundaries import flatten_words
 from .pipeline.render import RenderSpec, clip_thumbnail, detect_track, render
+from .pipeline.watermark import spec_for_clip
 from .services import media, ollama
 
 log = logging.getLogger("worker")
@@ -312,7 +313,7 @@ def process_sermon(sermon_id: str, payload: dict, r: JobRunner) -> None:
                     transcript=c.transcript, aspect=settings.get("aspect", "9:16"), template_id=template_id,
                     brand_kit_id=kit.id if kit else None,
                     options={"captions": True, "logo": bool(kit and kit.logo_path),
-                             "watermark": bool(kit and kit.watermark_text), "resolution": 1080,
+                             "watermark": bool(kit and (kit.watermark_text or kit.social_icons)), "resolution": 1080,
                              "quality": settings.get("quality") or "standard"},
                     status="queued")
                 db.add(gc)
@@ -451,7 +452,7 @@ def render_clip(clip_id: str, r: JobRunner) -> None:
         color_transfer = meta.get("color_transfer")
         logo = kit.logo_path if (kit and opts.get("logo", True)) else None
         logo_pos = kit.logo_position if kit else "top-right"
-        watermark = kit.watermark_text if (kit and opts.get("watermark")) else None
+        watermark = spec_for_clip(kit, opts)
         old_video, old_thumb = c.video_path, c.thumb_path
         org_id, sermon_id, sdir = c.org_id, s.id, Path(s.storage_dir)
 

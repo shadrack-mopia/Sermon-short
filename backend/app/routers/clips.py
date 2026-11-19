@@ -37,6 +37,13 @@ class ClipOptions(BaseModel):
     crop_x: float | None = Field(default=None, ge=0, le=1)  # manual framing override
     resolution: Literal[720, 1080] = 1080
     quality: Literal["standard", "high", "max"] = "standard"  # encoder quality (file size grows with quality)
+    # Per-clip watermark overrides. None = use the brand kit's setting.
+    wm_position: Literal["top-left", "top-center", "top-right", "middle-left", "center", "middle-right",
+                         "bottom-left", "bottom-center", "bottom-right"] | None = None
+    wm_size: int | None = Field(default=None, ge=50, le=300)
+    wm_opacity: int | None = Field(default=None, ge=10, le=100)
+    wm_icons: list[Literal["youtube", "tiktok", "instagram", "facebook", "x", "whatsapp"]] | None = Field(
+        default=None, max_length=6)
 
 
 class ClipUpdate(BaseModel):
@@ -175,11 +182,13 @@ def create_clip(body: ClipCreate, ctx: Ctx = Depends(current_ctx), db: Session =
     start, end = snap_range(words, body.start_s, body.end_s) if body.snap else (body.start_s, body.end_s)
     _validate_range(s, start, end)
     kit = db.scalar(select(BrandKit).where(BrandKit.org_id == ctx.org_id, BrandKit.is_default.is_(True)))
+    opts = ClipOptions(quality=(s.settings or {}).get("quality") or "standard",
+                       watermark=bool(kit and kit.auto_apply and (kit.watermark_text or kit.social_icons)))
     c = GeneratedClip(org_id=ctx.org_id, sermon_id=s.id, title=body.title, start_s=start, end_s=end,
                       aspect=body.aspect, transcript=text_between(words, start, end), category="custom",
                       template_id=(s.settings or {}).get("template_id"),
                       brand_kit_id=kit.id if kit and kit.auto_apply else None,
-                      options=ClipOptions(quality=(s.settings or {}).get("quality") or "standard").model_dump())
+                      options=opts.model_dump())
     db.add(c)
     db.flush()
     _queue_render(db, c)

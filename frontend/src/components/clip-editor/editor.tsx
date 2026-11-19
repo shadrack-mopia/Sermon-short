@@ -90,7 +90,7 @@ export function ClipEditor({ clip, onUpdated, onReload }: { clip: Clip; onUpdate
           {activeTab === "trim" && <TrimPanel draft={draft} update={update} clip={clip} snap={snap} setSnap={setSnap} />}
           {activeTab === "captions" && <CaptionsPanel clip={clip} dirtyTiming={draft.start_s !== base.start_s || draft.end_s !== base.end_s} onSaved={onReload} />}
           {activeTab === "style" && <StylePanel draft={draft} update={update} updateOptions={updateOptions} templates={templates} advanced={advanced} />}
-          {activeTab === "branding" && <BrandingPanel draft={draft} update={update} updateOptions={updateOptions} kits={kits} />}
+          {activeTab === "branding" && <BrandingPanel draft={draft} update={update} updateOptions={updateOptions} kits={kits} clip={clip} advanced={advanced} />}
           {activeTab === "format" && <FormatPanel draft={draft} update={update} updateOptions={updateOptions} clip={clip} advanced={advanced} />}
         </div>
       </Card>

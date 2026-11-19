@@ -9,6 +9,7 @@ pyjwt
 httpx
 numpy
 opencv-python-headless<5
+pillow
 faster-whisper
 # CUDA 12 runtime libraries for faster-whisper on NVIDIA GPUs (ignored on CPU)
 nvidia-cublas-cu12

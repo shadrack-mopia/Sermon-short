@@ -3,6 +3,8 @@
 Version 1 creates the full schema from the SQLAlchemy models. Future schema
 changes are appended to MIGRATIONS as (version, [sql, ...]) and applied once.
 """
+import re
+
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -11,8 +13,19 @@ from .db import Base, SessionLocal, engine
 from .models import ClipTemplate, SchemaVersion
 
 MIGRATIONS: list[tuple[int, list[str]]] = [
-    # (2, ["ALTER TABLE generated_clips ADD COLUMN foo TEXT"]),
+    (2, [  # watermark position / size / opacity and social-media icons on brand kits
+        "ALTER TABLE brand_kits ADD COLUMN watermark_position VARCHAR(20) NOT NULL DEFAULT 'top-left'",
+        "ALTER TABLE brand_kits ADD COLUMN watermark_size INTEGER NOT NULL DEFAULT 100",
+        "ALTER TABLE brand_kits ADD COLUMN watermark_opacity INTEGER NOT NULL DEFAULT 80",
+        "ALTER TABLE brand_kits ADD COLUMN social_icons JSON NOT NULL DEFAULT '[]'",
+    ]),
 ]
+
+_ADD_COLUMN = re.compile(r"ALTER TABLE (\w+) ADD COLUMN (\w+)", re.I)
+
+
+def _column_exists(db: Session, table: str, column: str) -> bool:
+    return any(row[1] == column for row in db.execute(text(f"PRAGMA table_info({table})")))
 
 BUILTIN_TEMPLATES = [
     {
@@ -81,6 +94,9 @@ def migrate() -> None:
         for version, statements in MIGRATIONS:
             if version > current:
                 for sql in statements:
+                    m = _ADD_COLUMN.match(sql)
+                    if m and _column_exists(db, m.group(1), m.group(2)):
+                        continue  # new databases already have it (create_all built the full schema)
                     db.execute(text(sql))
                 db.add(SchemaVersion(version=version))
         _seed_templates(db)
