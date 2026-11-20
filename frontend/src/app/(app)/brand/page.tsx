@@ -10,14 +10,31 @@ import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/spinner";
-import { EmptyState, ErrorState, InlineError, PageHeader } from "@/components/ui/states";
+import {
+  EmptyState,
+  ErrorState,
+  InlineError,
+  PageHeader,
+} from "@/components/ui/states";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import { IconPicker, PositionPicker, RangeField, WatermarkPreview, watermarkPreviewUrl } from "@/components/watermark";
+import {
+  IconPicker,
+  PositionPicker,
+  positionLabel,
+  RangeField,
+  WatermarkPreview,
+  watermarkPreviewUrl,
+} from "@/components/watermark";
 import { api, errorMessage } from "@/lib/api";
-import { cn, humanize } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { BrandKit, LogoPosition, SocialIcon, Template, WatermarkPosition } from "@/lib/types";
+import type {
+  BrandKit,
+  LogoPosition,
+  SocialIcon,
+  Template,
+  WatermarkPosition,
+} from "@/lib/types";
 
 export default function BrandPage() {
   const toast = useToast();
@@ -60,21 +77,44 @@ export default function BrandPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {kits.data.map((k) => (
             <Card key={k.id} className="overflow-hidden">
-              <div className="relative flex h-32 items-center justify-center" style={{ background: `linear-gradient(135deg, ${k.colors.primary ?? "#6D28D9"}, ${k.colors.secondary ?? "#0F172A"})` }}>
+              <div
+                className="relative flex h-32 items-center justify-center"
+                style={{
+                  background: `linear-gradient(135deg, ${k.colors.primary ?? "#6D28D9"}, ${k.colors.secondary ?? "#0F172A"})`,
+                }}
+              >
                 {k.logo_url ? (
-                  <img src={k.logo_url} alt={`${k.name} logo`} className="max-h-20 max-w-[60%] object-contain drop-shadow" />
+                  <img
+                    src={k.logo_url}
+                    alt={`${k.name} logo`}
+                    className="max-h-20 max-w-[60%] object-contain drop-shadow"
+                  />
                 ) : (
                   <span className="text-sm text-white/70">No logo yet</span>
                 )}
                 {(() => {
-                  const url = watermarkPreviewUrl({ text: k.watermark_text ?? "", icons: k.social_icons, size: 100, opacity: k.watermark_opacity, font: k.font });
-                  return url ? <img src={url} alt={`Watermark: ${k.watermark_text ?? ""}`} className="absolute right-3 bottom-2 h-5 w-auto" /> : null;
+                  const url = watermarkPreviewUrl({
+                    text: k.watermark_text ?? "",
+                    icons: k.social_icons,
+                    size: 100,
+                    opacity: k.watermark_opacity,
+                    font: k.font,
+                  });
+                  return url ? (
+                    <img
+                      src={url}
+                      alt={`Watermark: ${k.watermark_text ?? ""}`}
+                      className="absolute right-3 bottom-2 h-5 w-auto"
+                    />
+                  ) : null;
                 })()}
               </div>
               <div className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-slate-900">{k.name}</div>
+                    <div className="truncate font-medium text-slate-900">
+                      {k.name}
+                    </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {k.is_default && (
                         <Badge tone="violet">
@@ -85,26 +125,47 @@ export default function BrandPage() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon-sm" onClick={() => setEditing(k)} aria-label="Edit">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setEditing(k)}
+                      aria-label="Edit"
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setDeleting(k)} aria-label="Delete">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setDeleting(k)}
+                      aria-label="Delete"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {(["primary", "secondary", "accent"] as const).map((c) => (
-                    <span key={c} className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <span className="h-5 w-5 rounded-full ring-1 ring-black/10" style={{ background: k.colors[c] }} />
+                    <span
+                      key={c}
+                      className="flex items-center gap-1.5 text-xs text-slate-500"
+                    >
+                      <span
+                        className="h-5 w-5 rounded-full ring-1 ring-black/10"
+                        style={{ background: k.colors[c] }}
+                      />
                       {k.colors[c]}
                     </span>
                   ))}
                 </div>
                 <div className="text-xs text-slate-500">
-                  {k.font ? `Font: ${k.font} · ` : ""}Logo: {humanize(k.logo_position)}
-                  {k.watermark_text || k.social_icons.length ? ` · Watermark: ${humanize(k.watermark_position)}, ${k.watermark_size}%` : ""}
-                  {k.default_template_id && templates.data ? ` · Captions: ${templates.data.find((t) => t.id === k.default_template_id)?.name ?? "—"}` : ""}
+                  {k.font ? `Font: ${k.font} · ` : ""}Logo:{" "}
+                  {positionLabel(k.logo_position)}
+                  {k.watermark_text || k.social_icons.length
+                    ? ` · Watermark: ${positionLabel(k.watermark_position)}, ${k.watermark_size}%`
+                    : ""}
+                  {k.default_template_id && templates.data
+                    ? ` · Captions: ${templates.data.find((t) => t.id === k.default_template_id)?.name ?? "—"}`
+                    : ""}
                 </div>
               </div>
             </Card>
@@ -140,9 +201,17 @@ export default function BrandPage() {
   );
 }
 
-const POSITIONS: LogoPosition[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
-
-function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null; templates: Template[]; onClose: () => void; onSaved: () => Promise<void> }) {
+function KitDialog({
+  kit,
+  templates,
+  onClose,
+  onSaved,
+}: {
+  kit: BrandKit | null;
+  templates: Template[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const toast = useToast();
   const [form, setForm] = useState({
     name: kit?.name ?? "",
@@ -151,31 +220,40 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
     accent: kit?.colors.accent ?? "#FFD400",
     font: kit?.font ?? "",
     watermark_text: kit?.watermark_text ?? "",
-    watermark_position: kit?.watermark_position ?? ("top-left" as WatermarkPosition),
+    watermark_position:
+      kit?.watermark_position ?? ("r0c0" as WatermarkPosition),
     watermark_size: kit?.watermark_size ?? 100,
     watermark_opacity: kit?.watermark_opacity ?? 80,
     social_icons: kit?.social_icons ?? ([] as SocialIcon[]),
-    logo_position: kit?.logo_position ?? ("top-right" as LogoPosition),
+    logo_position: kit?.logo_position ?? ("r0c2" as LogoPosition),
     default_template_id: kit?.default_template_id ?? "",
     is_default: kit?.is_default ?? false,
     auto_apply: kit?.auto_apply ?? true,
   });
   const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(kit?.logo_url ?? null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(
+    kit?.logo_url ?? null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   const hex = /^#[0-9A-Fa-f]{6}$/;
   const submit = async () => {
     if (!form.name.trim()) return setError("Give the brand kit a name.");
-    if (![form.primary, form.secondary, form.accent].every((c) => hex.test(c))) return setError("Colours must be hex values like #6D28D9.");
+    if (![form.primary, form.secondary, form.accent].every((c) => hex.test(c)))
+      return setError("Colours must be hex values like #6D28D9.");
     setBusy(true);
     setError(null);
     const body = {
       name: form.name.trim(),
-      colors: { primary: form.primary, secondary: form.secondary, accent: form.accent },
+      colors: {
+        primary: form.primary,
+        secondary: form.secondary,
+        accent: form.accent,
+      },
       font: form.font.trim() || null,
       watermark_text: form.watermark_text.trim() || null,
       watermark_position: form.watermark_position,
@@ -188,7 +266,9 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
       auto_apply: form.auto_apply,
     };
     try {
-      const saved = kit ? await api.patch<BrandKit>(`/api/brand-kits/${kit.id}`, body) : await api.post<BrandKit>("/api/brand-kits", body);
+      const saved = kit
+        ? await api.patch<BrandKit>(`/api/brand-kits/${kit.id}`, body)
+        : await api.post<BrandKit>("/api/brand-kits", body);
       if (logo) {
         const fd = new FormData();
         fd.append("file", logo);
@@ -245,71 +325,117 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
     >
       <div className="space-y-5">
         <Field label="Name">
-          <Input value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={200} placeholder="e.g. Grace Church main" autoFocus />
+          <Input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            maxLength={200}
+            placeholder="e.g. Grace Church main"
+            autoFocus
+          />
         </Field>
-        <div>
-          <Label>Logo</Label>
-          <div className="flex items-center gap-4">
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
-              {logoPreview ? <img src={logoPreview} alt="Logo preview" className="max-h-full max-w-full object-contain" /> : <ImagePlus className="h-6 w-6 text-slate-400" />}
+        <div className="flex flex-wrap items-start justify-between gap-5 rounded-xl border border-slate-200 p-4">
+          <div className="min-w-[240px] flex-1">
+            <div className="mb-3 text-sm font-semibold text-slate-900">
+              Logo
             </div>
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-                  {logoPreview ? "Replace" : "Upload logo"}
-                </Button>
-                {logoPreview && (
-                  <Button variant="ghost" size="sm" onClick={() => void removeLogo()}>
-                    Remove
-                  </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                {logoPreview ? (
+                  <img
+                    src={logoPreview}
+                    alt="Logo preview"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <ImagePlus className="h-6 w-6 text-slate-400" />
                 )}
               </div>
-              <p className="text-xs text-slate-500">PNG with transparency works best. PNG, JPG or WEBP up to 5 MB.</p>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {logoPreview ? "Replace" : "Upload logo"}
+                  </Button>
+                  {logoPreview && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void removeLogo()}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  PNG with transparency works best. PNG, JPG or WEBP up to 5 MB.
+                </p>
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024)
+                    return setError("Logo must be under 5 MB.");
+                  setLogo(f);
+                  setLogoPreview(URL.createObjectURL(f));
+                }}
+              />
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                if (f.size > 5 * 1024 * 1024) return setError("Logo must be under 5 MB.");
-                setLogo(f);
-                setLogoPreview(URL.createObjectURL(f));
-              }}
+          </div>
+          <div>
+            <Label>Logo position</Label>
+            <PositionPicker
+              label="Logo position"
+              value={form.logo_position}
+              onChange={(p) => set("logo_position", p)}
+              other={
+                form.watermark_text.trim() || form.social_icons.length
+                  ? form.watermark_position
+                  : null
+              }
+              otherLabel="Watermark"
             />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <ColorInput label="Primary" value={form.primary} onChange={(v) => set("primary", v)} />
-          <ColorInput label="Secondary" value={form.secondary} onChange={(v) => set("secondary", v)} />
-          <ColorInput label="Accent" value={form.accent} onChange={(v) => set("accent", v)} />
+          <ColorInput
+            label="Primary"
+            value={form.primary}
+            onChange={(v) => set("primary", v)}
+          />
+          <ColorInput
+            label="Secondary"
+            value={form.secondary}
+            onChange={(v) => set("secondary", v)}
+          />
+          <ColorInput
+            label="Accent"
+            value={form.accent}
+            onChange={(v) => set("accent", v)}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Font" hint="Must be installed on the server computer.">
-            <Input value={form.font} onChange={(e) => set("font", e.target.value)} placeholder="e.g. Montserrat" maxLength={100} />
-          </Field>
-          <Field label="Logo position">
-            <div className="grid grid-cols-2 gap-1.5">
-              {POSITIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => set("logo_position", p)}
-                  className={cn(
-                    "cursor-pointer rounded-lg border px-2 py-1.5 text-xs font-medium transition",
-                    form.logo_position === p ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600 hover:border-slate-300",
-                  )}
-                >
-                  {humanize(p)}
-                </button>
-              ))}
-            </div>
+            <Input
+              value={form.font}
+              onChange={(e) => set("font", e.target.value)}
+              placeholder="e.g. Montserrat"
+              maxLength={100}
+            />
           </Field>
           <Field label="Default caption template">
-            <Select value={form.default_template_id} onChange={(e) => set("default_template_id", e.target.value)}>
+            <Select
+              value={form.default_template_id}
+              onChange={(e) => set("default_template_id", e.target.value)}
+            >
               <option value="">System default</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -320,25 +446,59 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
           </Field>
         </div>
         <div className="rounded-xl border border-slate-200 p-4">
-          <div className="mb-3 text-sm font-semibold text-slate-900">Watermark</div>
+          <div className="mb-3 text-sm font-semibold text-slate-900">
+            Watermark
+          </div>
           <div className="flex flex-col gap-5 sm:flex-row">
             <div className="min-w-0 flex-1 space-y-4">
-              <Field label="Text" hint="Optional. For example your handle or church name.">
-                <Input value={form.watermark_text} onChange={(e) => set("watermark_text", e.target.value)} placeholder="e.g. @gracechurch" maxLength={200} />
+              <Field
+                label="Text"
+                hint="Optional. For example your handle or church name."
+              >
+                <Input
+                  value={form.watermark_text}
+                  onChange={(e) => set("watermark_text", e.target.value)}
+                  placeholder="e.g. @gracechurch"
+                  maxLength={200}
+                />
               </Field>
               <div>
                 <Label>Social media icons</Label>
-                <IconPicker value={form.social_icons} onChange={(v) => set("social_icons", v)} />
-                <p className="mt-1 text-xs text-slate-500">Shown in front of the text. Pick none to show the text only.</p>
+                <IconPicker
+                  value={form.social_icons}
+                  onChange={(v) => set("social_icons", v)}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Shown in front of the text. Pick none to show the text only.
+                </p>
               </div>
               <div className="flex flex-wrap items-start gap-5">
                 <div>
                   <Label>Position</Label>
-                  <PositionPicker value={form.watermark_position} onChange={(p) => set("watermark_position", p)} />
+                  <PositionPicker
+                    label="Watermark position"
+                    value={form.watermark_position}
+                    onChange={(p) => set("watermark_position", p)}
+                    other={logoPreview ? form.logo_position : null}
+                    otherLabel="Logo"
+                  />
                 </div>
                 <div className="min-w-[160px] flex-1 space-y-3">
-                  <RangeField label="Size" value={form.watermark_size} min={50} max={300} step={10} onChange={(v) => set("watermark_size", v)} />
-                  <RangeField label="Opacity" value={form.watermark_opacity} min={10} max={100} onChange={(v) => set("watermark_opacity", v)} />
+                  <RangeField
+                    label="Size"
+                    value={form.watermark_size}
+                    min={50}
+                    max={300}
+                    step={10}
+                    onChange={(v) => set("watermark_size", v)}
+                  />
+                  <RangeField
+                    label="Opacity"
+                    value={form.watermark_opacity}
+                    min={10}
+                    max={100}
+                    onChange={(v) => set("watermark_opacity", v)}
+                  />
                 </div>
               </div>
             </div>
@@ -356,13 +516,26 @@ function KitDialog({ kit, templates, onClose, onSaved }: { kit: BrandKit | null;
                 logoUrl={logoPreview}
                 logoPosition={form.logo_position}
               />
-              <p className="max-w-[180px] text-center text-[11px] text-slate-400">Same image as the rendered clip. Each clip can override these settings.</p>
+              <p className="max-w-[180px] text-center text-[11px] text-slate-400">
+                Same image as the rendered clip. Each clip can override these
+                settings.
+              </p>
             </div>
           </div>
         </div>
         <div className="space-y-4 rounded-xl bg-slate-50 p-4">
-          <Switch checked={form.is_default} onChange={(v) => set("is_default", v)} label="Default brand kit" description="Used for new sermons unless you pick another." />
-          <Switch checked={form.auto_apply} onChange={(v) => set("auto_apply", v)} label="Auto-apply to new clips" description="Stamp the logo/watermark on clips automatically." />
+          <Switch
+            checked={form.is_default}
+            onChange={(v) => set("is_default", v)}
+            label="Default brand kit"
+            description="Used for new sermons unless you pick another."
+          />
+          <Switch
+            checked={form.auto_apply}
+            onChange={(v) => set("auto_apply", v)}
+            label="Auto-apply to new clips"
+            description="Stamp the logo/watermark on clips automatically."
+          />
         </div>
         <InlineError>{error}</InlineError>
       </div>

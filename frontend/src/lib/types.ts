@@ -196,17 +196,12 @@ export interface Template {
   builtin: boolean;
 }
 
-export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-export type WatermarkPosition =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "middle-left"
-  | "center"
-  | "middle-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
+/** Placement grid cell: 6 rows × 3 columns, "r0c0" (top-left) … "r5c2" (bottom-right). */
+export type GridRow = 0 | 1 | 2 | 3 | 4 | 5;
+export type GridCol = 0 | 1 | 2;
+export type GridPosition = `r${GridRow}c${GridCol}`;
+export type LogoPosition = GridPosition;
+export type WatermarkPosition = GridPosition;
 export type SocialIcon = "youtube" | "tiktok" | "instagram" | "facebook" | "x" | "whatsapp";
 
 export interface BrandKit {

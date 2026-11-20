@@ -16,6 +16,7 @@ from ..models import BrandKit, ClipCaption, ClipTemplate, GeneratedClip, Process
 from ..pipeline.boundaries import flatten_words, snap_range, text_between
 from ..security import Ctx, audit, current_ctx
 from ..serializers import clip_out
+from .brand import GridPosition
 from .sermons import get_sermon
 
 router = APIRouter(tags=["clips"])
@@ -38,8 +39,7 @@ class ClipOptions(BaseModel):
     resolution: Literal[720, 1080] = 1080
     quality: Literal["standard", "high", "max"] = "standard"  # encoder quality (file size grows with quality)
     # Per-clip watermark overrides. None = use the brand kit's setting.
-    wm_position: Literal["top-left", "top-center", "top-right", "middle-left", "center", "middle-right",
-                         "bottom-left", "bottom-center", "bottom-right"] | None = None
+    wm_position: GridPosition | None = None  # grid cell r{0-5}c{0-2}
     wm_size: int | None = Field(default=None, ge=50, le=300)
     wm_opacity: int | None = Field(default=None, ge=10, le=100)
     wm_icons: list[Literal["youtube", "tiktok", "instagram", "facebook", "x", "whatsapp"]] | None = Field(

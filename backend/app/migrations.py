@@ -12,13 +12,28 @@ from . import models  # noqa: F401  (register tables)
 from .db import Base, SessionLocal, engine
 from .models import ClipTemplate, SchemaVersion
 
+def _grid_position_sql() -> list[str]:
+    """Convert old position names ('top-left', 'center', ...) to grid cells in brand kits and clip overrides."""
+    from .pipeline.watermark import LEGACY_POSITIONS
+    case = lambda expr: "CASE " + expr + " " + " ".join(  # noqa: E731
+        f"WHEN '{old}' THEN '{new}'" for old, new in LEGACY_POSITIONS.items()) + f" ELSE {expr} END"
+    olds = ", ".join(f"'{o}'" for o in LEGACY_POSITIONS)
+    wm = "json_extract(options, '$.wm_position')"
+    return [
+        f"UPDATE brand_kits SET watermark_position = {case('watermark_position')}",
+        f"UPDATE brand_kits SET logo_position = {case('logo_position')}",
+        f"UPDATE generated_clips SET options = json_set(options, '$.wm_position', {case(wm)}) WHERE {wm} IN ({olds})",
+    ]
+
+
 MIGRATIONS: list[tuple[int, list[str]]] = [
     (2, [  # watermark position / size / opacity and social-media icons on brand kits
-        "ALTER TABLE brand_kits ADD COLUMN watermark_position VARCHAR(20) NOT NULL DEFAULT 'top-left'",
+        "ALTER TABLE brand_kits ADD COLUMN watermark_position VARCHAR(20) NOT NULL DEFAULT 'top-left'",  # -> r0c0 in v3
         "ALTER TABLE brand_kits ADD COLUMN watermark_size INTEGER NOT NULL DEFAULT 100",
         "ALTER TABLE brand_kits ADD COLUMN watermark_opacity INTEGER NOT NULL DEFAULT 80",
         "ALTER TABLE brand_kits ADD COLUMN social_icons JSON NOT NULL DEFAULT '[]'",
     ]),
+    (3, _grid_position_sql()),  # named corners/centre -> 6x3 grid cells (r{row}c{col})
 ]
 
 _ADD_COLUMN = re.compile(r"ALTER TABLE (\w+) ADD COLUMN (\w+)", re.I)

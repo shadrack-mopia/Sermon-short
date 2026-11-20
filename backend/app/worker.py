@@ -451,7 +451,7 @@ def render_clip(clip_id: str, r: JobRunner) -> None:
         quality = opts.get("quality") or (s.settings or {}).get("quality") or "standard"
         color_transfer = meta.get("color_transfer")
         logo = kit.logo_path if (kit and opts.get("logo", True)) else None
-        logo_pos = kit.logo_position if kit else "top-right"
+        logo_pos = kit.logo_position if kit else "r0c2"
         watermark = spec_for_clip(kit, opts)
         old_video, old_thumb = c.video_path, c.thumb_path
         org_id, sermon_id, sdir = c.org_id, s.id, Path(s.storage_dir)

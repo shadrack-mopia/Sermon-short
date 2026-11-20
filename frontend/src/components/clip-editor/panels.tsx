@@ -814,8 +814,13 @@ export function BrandingPanel({
                     <div>
                       <Label>Position</Label>
                       <PositionPicker
+                        label="Watermark position"
                         value={look.position}
                         onChange={(p) => updateOptions({ wm_position: p })}
+                        other={
+                          o.logo && kit.logo_url ? kit.logo_position : null
+                        }
+                        otherLabel="Logo"
                       />
                     </div>
                     <div className="min-w-[150px] flex-1 space-y-3">

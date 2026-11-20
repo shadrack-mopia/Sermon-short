@@ -9,7 +9,8 @@ from ..config import get_settings
 from ..services.media import (SDR_TAGS, audio_bitrate, encoder_args, is_hdr, run, run_with_progress, tonemap_filter,
                               video_encoder)
 from .captions import build_ass
-from .watermark import WatermarkSpec, build_image, overlay_xy
+from .watermark import (DEFAULT_LOGO_POSITION, WatermarkSpec, avoid_overlap_dy, build_image, normalize_position,
+                        overlay_xy)
 
 log = logging.getLogger("render")
 
@@ -36,7 +37,7 @@ class RenderSpec:
     style: dict | None = None
     show_captions: bool = True
     logo_path: str | None = None
-    logo_position: str = "top-right"
+    logo_position: str = "r0c2"
     watermark: WatermarkSpec | None = None  # icons + text image overlay
     quality: str = "standard"  # standard | high | max
     color_transfer: str | None = None  # from ffprobe; HDR sources are tone-mapped to SDR
@@ -187,8 +188,7 @@ def render(spec: RenderSpec, workdir: Path, on_progress=None) -> None:
                 logo_h = int(lw * li.height / max(1, li.width))
         except OSError:
             logo_h = lw
-        pos = {"top-left": f"{m}:{m}", "top-right": f"W-w-{m}:{m}", "bottom-left": f"{m}:H-h-{m}",
-               "bottom-right": f"W-w-{m}:H-h-{m}"}.get(spec.logo_position, f"W-w-{m}:{m}")
+        pos = overlay_xy(normalize_position(spec.logo_position, DEFAULT_LOGO_POSITION), m)
         inputs += ["-loop", "1", "-i", str(spec.logo_path)]
         graph += (f";[{n_in}:v]scale={lw}:-1,format=rgba,colorchannelmixer=aa=0.92[logo];"
                   f"{last}[logo]overlay={pos}:shortest=1[vlogo]")
@@ -196,13 +196,9 @@ def render(spec: RenderSpec, workdir: Path, on_progress=None) -> None:
     if spec.watermark and not spec.watermark.is_empty():
         wm_png = workdir / "watermark.png"
         build_image(spec.watermark, ow, oh).save(wm_png)
-        xy = overlay_xy(spec.watermark.position, m)
-        if has_logo and spec.watermark.position == spec.logo_position:
-            # same corner as the logo: sit just beyond the logo instead of on top of it
-            shift = m + logo_h + m // 2
-            x, yy = xy.split(":")
-            yy = str(shift) if spec.watermark.position.startswith("top") else f"H-h-{shift}"
-            xy = f"{x}:{yy}"
+        # same cell as the logo: sit just beyond the logo instead of on top of it
+        dy = avoid_overlap_dy(spec.watermark.position, spec.logo_position, logo_h, m) if has_logo else 0
+        xy = overlay_xy(spec.watermark.position, m, dy)
         inputs += ["-loop", "1", "-i", wm_png.name]
         graph += f";{last}[{n_in}:v]overlay={xy}:shortest=1[vwm]"
         last, n_in = "[vwm]", n_in + 1

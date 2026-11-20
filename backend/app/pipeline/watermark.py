@@ -16,8 +16,27 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 SOCIAL_ICONS = ["youtube", "tiktok", "instagram", "facebook", "x", "whatsapp"]
-POSITIONS = ["top-left", "top-center", "top-right", "middle-left", "center", "middle-right",
-             "bottom-left", "bottom-center", "bottom-right"]
+# Placement grid: 6 rows x 3 columns, written "r{row}c{col}" (r0c0 = top-left, r5c2 = bottom-right).
+# Rows are spread evenly from the top margin to the bottom margin; columns are left / centre / right.
+GRID_ROWS, GRID_COLS = 6, 3
+POSITIONS = [f"r{r}c{c}" for r in range(GRID_ROWS) for c in range(GRID_COLS)]
+DEFAULT_WATERMARK_POSITION, DEFAULT_LOGO_POSITION = "r0c0", "r0c2"
+# names used before the grid existed (stored in older brand kits / clips)
+LEGACY_POSITIONS = {
+    "top-left": "r0c0", "top-center": "r0c1", "top-right": "r0c2",
+    "middle-left": "r2c0", "center": "r2c1", "middle-right": "r2c2",
+    "bottom-left": "r5c0", "bottom-center": "r5c1", "bottom-right": "r5c2",
+}
+
+
+def normalize_position(p: str | None, default: str = DEFAULT_WATERMARK_POSITION) -> str:
+    p = LEGACY_POSITIONS.get(p or "", p)
+    return p if p in POSITIONS else default
+
+
+def grid_cell(position: str) -> tuple[int, int]:
+    p = normalize_position(position)
+    return int(p[1]), int(p[3])
 SIZE_MIN, SIZE_MAX = 50, 300      # % of the default size
 OPACITY_MIN, OPACITY_MAX = 10, 100  # %
 
@@ -30,7 +49,7 @@ SS = 4  # supersampling factor for smooth icon edges
 class WatermarkSpec:
     text: str | None = None
     icons: list[str] = field(default_factory=list)
-    position: str = "top-left"
+    position: str = DEFAULT_WATERMARK_POSITION
     size: int = 100      # percent
     opacity: int = 80    # percent
     font: str | None = None
@@ -208,15 +227,34 @@ def to_png(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def overlay_xy(position: str, margin: int) -> str:
-    """FFmpeg overlay x:y for one of the 9 positions (W/H = frame, w/h = watermark)."""
-    col = position.split("-")[-1] if "-" in position else "center"
-    row = position.split("-")[0] if "-" in position else "middle"
-    if position == "center":
-        col, row = "center", "middle"
-    x = {"left": f"{margin}", "center": "(W-w)/2", "right": f"W-w-{margin}"}[col]
-    y = {"top": f"{margin}", "middle": "(H-h)/2", "bottom": f"H-h-{margin}"}[row]
+def overlay_xy(position: str, margin: int, dy: int = 0) -> str:
+    """FFmpeg overlay x:y for a grid cell (W/H = frame, w/h = overlay). dy nudges it down (+) or up (-).
+
+    Columns: left edge / centred / right edge. Rows are spread evenly, so row 0 touches the
+    top margin, row 5 the bottom margin, and rows 1-4 sit in between.
+    """
+    r, c = grid_cell(position)
+    m = margin
+    x = {0: f"{m}", 1: "(W-w)/2", 2: f"W-w-{m}"}[c]
+    last = GRID_ROWS - 1
+    if r == 0:
+        y = f"{m}"
+    elif r == last:
+        y = f"H-h-{m}"
+    else:
+        y = f"{m}+(H-h-{2 * m})*{r}/{last}"
+    if dy:
+        y = f"{y}{'+' if dy > 0 else '-'}{abs(dy)}"
     return f"{x}:{y}"
+
+
+def avoid_overlap_dy(wm_position: str, logo_position: str, logo_h: int, margin: int) -> int:
+    """If the watermark shares the logo's cell, move it just past the logo (down in the top half, up in the bottom)."""
+    if normalize_position(wm_position) != normalize_position(logo_position, DEFAULT_LOGO_POSITION):
+        return 0
+    r, _ = grid_cell(wm_position)
+    shift = logo_h + margin // 2
+    return shift if r < GRID_ROWS / 2 else -shift
 
 
 def spec_for_clip(kit, opts: dict) -> WatermarkSpec | None:
@@ -233,7 +271,7 @@ def spec_for_clip(kit, opts: dict) -> WatermarkSpec | None:
 def clamp_spec(**kw) -> WatermarkSpec:
     s = WatermarkSpec(**kw)
     s.icons = [i for i in dict.fromkeys(s.icons or []) if i in SOCIAL_ICONS]
-    s.position = s.position if s.position in POSITIONS else "top-left"
+    s.position = normalize_position(s.position)
     s.size = int(max(SIZE_MIN, min(SIZE_MAX, s.size or 100)))
     s.opacity = int(max(OPACITY_MIN, min(OPACITY_MAX, s.opacity or 80)))
     return s

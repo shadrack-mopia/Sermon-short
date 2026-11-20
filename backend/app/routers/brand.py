@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -19,9 +19,20 @@ router = APIRouter(tags=["brand"])
 
 LOGO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 HEX = r"^#[0-9A-Fa-f]{6}$"
-WmPosition = Literal["top-left", "top-center", "top-right", "middle-left", "center", "middle-right",
-                     "bottom-left", "bottom-center", "bottom-right"]
 SocialIcon = Literal["youtube", "tiktok", "instagram", "facebook", "x", "whatsapp"]
+
+
+def _grid_position(v):
+    """Accept grid cells 'r{0-5}c{0-2}' (and the old names like 'top-left', converted)."""
+    if v is None:
+        return v
+    v = wm.LEGACY_POSITIONS.get(v, v)
+    if v not in wm.POSITIONS:
+        raise ValueError("position must be a grid cell r0c0 … r5c2 (6 rows × 3 columns)")
+    return v
+
+
+GridPosition = Annotated[str, BeforeValidator(_grid_position)]
 
 
 class Colors(BaseModel):
@@ -35,11 +46,11 @@ class BrandIn(BaseModel):
     colors: Colors = Colors()
     font: str | None = Field(default=None, max_length=100)
     watermark_text: str | None = Field(default=None, max_length=200)
-    watermark_position: WmPosition = "top-left"
+    watermark_position: GridPosition = wm.DEFAULT_WATERMARK_POSITION
     watermark_size: int = Field(default=100, ge=wm.SIZE_MIN, le=wm.SIZE_MAX)
     watermark_opacity: int = Field(default=80, ge=wm.OPACITY_MIN, le=wm.OPACITY_MAX)
     social_icons: list[SocialIcon] = Field(default_factory=list, max_length=6)
-    logo_position: str = Field(default="top-right", pattern="^(top-left|top-right|bottom-left|bottom-right)$")
+    logo_position: GridPosition = wm.DEFAULT_LOGO_POSITION
     default_template_id: str | None = None
     is_default: bool = False
     auto_apply: bool = True
@@ -50,11 +61,11 @@ class BrandPatch(BaseModel):
     colors: Colors | None = None
     font: str | None = None
     watermark_text: str | None = Field(default=None, max_length=200)
-    watermark_position: WmPosition | None = None
+    watermark_position: GridPosition | None = None
     watermark_size: int | None = Field(default=None, ge=wm.SIZE_MIN, le=wm.SIZE_MAX)
     watermark_opacity: int | None = Field(default=None, ge=wm.OPACITY_MIN, le=wm.OPACITY_MAX)
     social_icons: list[SocialIcon] | None = Field(default=None, max_length=6)
-    logo_position: str | None = Field(default=None, pattern="^(top-left|top-right|bottom-left|bottom-right)$")
+    logo_position: GridPosition | None = None
     default_template_id: str | None = None
     is_default: bool | None = None
     auto_apply: bool | None = None

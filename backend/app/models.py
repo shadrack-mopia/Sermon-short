@@ -182,11 +182,11 @@ class BrandKit(TimestampMixin, Base):
     colors: Mapped[dict] = mapped_column(JSON, default=dict)  # primary, secondary, accent
     font: Mapped[str | None] = mapped_column(String(100))
     watermark_text: Mapped[str | None] = mapped_column(String(200))
-    watermark_position: Mapped[str] = mapped_column(String(20), default="top-left")  # one of 9 positions
+    watermark_position: Mapped[str] = mapped_column(String(20), default="r0c0")  # grid cell r{0-5}c{0-2}
     watermark_size: Mapped[int] = mapped_column(Integer, default=100)  # percent of default size
     watermark_opacity: Mapped[int] = mapped_column(Integer, default=80)  # percent
     social_icons: Mapped[list] = mapped_column(JSON, default=list)  # e.g. ["tiktok", "instagram"]
-    logo_position: Mapped[str] = mapped_column(String(20), default="top-right")
+    logo_position: Mapped[str] = mapped_column(String(20), default="r0c2")  # grid cell r{0-5}c{0-2}
     default_template_id: Mapped[str | None] = mapped_column(ForeignKey("clip_templates.id", ondelete="SET NULL"))
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     auto_apply: Mapped[bool] = mapped_column(Boolean, default=True)
